@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Budget Planner</title>
+    <style>
+        :root { --green:#155e4b; --green-light:#e4f5ee; --ink:#172b25; --muted:#6c7b75; --line:#e7eeea; }
+        * { box-sizing:border-box; }
+        body { margin:0; font-family:Inter,Segoe UI,Arial,sans-serif; color:var(--ink); background:#f5f8f6; }
+        header { background:linear-gradient(120deg,#104b3c,#21775c); color:white; padding:28px max(20px,calc((100% - 1120px)/2)); }
+        header h1 { margin:0 0 6px; font-size:clamp(25px,4vw,34px); }
+        header p { margin:0; color:#d6eee4; }
+        main { max-width:1120px; margin:28px auto; padding:0 18px 40px; }
+        .eyebrow { color:var(--muted); text-transform:uppercase; letter-spacing:1.5px; font-size:12px; font-weight:700; margin:0 0 14px; }
+        .cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+        .card,.panel { background:white; border:1px solid var(--line); border-radius:16px; padding:22px; box-shadow:0 8px 28px #173b2d08; }
+        .card .label { color:var(--muted); font-size:14px; margin:0 0 12px; }
+        .amount { font-size:clamp(22px,3vw,30px); font-weight:750; letter-spacing:-.6px; overflow-wrap:anywhere; }
+        .green { color:#16845c; } .red { color:#d14f4f; }
+        .content { display:grid; grid-template-columns:minmax(260px,.8fr) minmax(0,1.5fr); gap:18px; margin-top:20px; align-items:start; }
+        h2 { font-size:19px; margin:0 0 18px; }
+        label { display:block; font-size:13px; font-weight:650; margin:12px 0 7px; }
+        .field { width:100%; border:1px solid #d9e4de; border-radius:9px; padding:12px; font:inherit; color:var(--ink); background:#fff; }
+        .field:focus { outline:2px solid #b6e4d0; border-color:#3a9877; }
+        button { border:0; border-radius:9px; padding:11px 14px; font-weight:700; cursor:pointer; }
+        .primary { width:100%; margin-top:16px; background:var(--green); color:white; }
+        .primary:hover { background:#104b3c; }
+        .messages { list-style:none; padding:0; margin:0 0 18px; }
+        .messages li { background:var(--green-light); padding:12px 14px; border-radius:9px; margin-bottom:8px; }
+        .errorlist { color:#c0392b; font-size:13px; padding-left:18px; }
+        .table-wrap { overflow-x:auto; }
+        table { width:100%; border-collapse:collapse; min-width:420px; }
+        th,td { text-align:left; padding:13px 10px; border-bottom:1px solid #edf1ee; font-size:14px; }
+        th { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.7px; }
+        .pill { display:inline-block; border-radius:30px; padding:5px 9px; font-size:12px; font-weight:700; }
+        .pill.income { background:#e4f5ee; color:#16845c; }
+        .pill.expense { background:#ffeded; color:#c44141; }
+        .delete { background:#fff0f0; color:#b43d3d; padding:7px 9px; }
+        .empty { text-align:center; color:var(--muted); padding:28px 8px; }
+        footer { text-align:center; color:var(--muted); font-size:12px; padding:0 18px 25px; }
+        @media(max-width:760px) { .cards { grid-template-columns:1fr; } .content { grid-template-columns:1fr; } main { margin-top:20px; } }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Budget Planner</h1>
+    <p>Make every rupee count. Track your money with confidence.</p>
+</header>
+<main>
+    {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}<li>{{ message }}</li>{% endfor %}
+        </ul>
+    {% endif %}
+    <p class="eyebrow">Your overview</p>
+    <section class="cards">
+        <article class="card">
+            <p class="label">Total income</p>
+            <div class="amount green">₹{{ income|floatformat:2 }}</div>
+        </article>
+        <article class="card">
+            <p class="label">Total expenses</p>
+            <div class="amount red">₹{{ expenses|floatformat:2 }}</div>
+        </article>
+        <article class="card">
+            <p class="label">Remaining balance</p>
+            <div class="amount">₹{{ balance|floatformat:2 }}</div>
+        </article>
+    </section>
+
+    <section class="content">
+        <article class="panel">
+            <h2>Add a transaction</h2>
+            <form method="post">
+                {% csrf_token %}
+                {{ form.non_field_errors }}
+                {% for field in form %}
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {{ field.errors }}
+                {% endfor %}
+                <button class="primary" type="submit">+ Add transaction</button>
+            </form>
+        </article>
+
+        <article class="panel">
+            <h2>Recent transactions</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Transaction</th><th>Category</th><th>Type</th><th>Amount</th><th></th></tr></thead>
+                    <tbody>
+                    {% for item in transactions %}
+                        <tr>
+                            <td><strong>{{ item.title }}</strong><br><small>{{ item.date|date:"d M Y" }}</small></td>
+                            <td>{{ item.category }}</td>
+                            <td><span class="pill {{ item.transaction_type }}">{{ item.get_transaction_type_display }}</span></td>
+                            <td class="{% if item.transaction_type == 'income' %}green{% else %}red{% endif %}">₹{{ item.amount|floatformat:2 }}</td>
+                            <td>
+                                <form method="post" action="{% url 'delete_transaction' item.pk %}" onsubmit="return confirm('Delete this transaction?');">
+                                    {% csrf_token %}
+                                    <button class="delete" type="submit" aria-label="Delete {{ item.title }}">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="5" class="empty">No transactions yet. Add your first income or expense.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </section>
+</main>
+<footer>Budget Planner · Built with Python and Django</footer>
+</body>
+</html>
